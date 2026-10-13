@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>릴 아케이드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=DotGothic16&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+<style>
+/* 레이아웃: 가운데 오락기 캐비닛 한 대(최대 520px) — 상단 LED 계기판, 3×3 릴 창, 하단 조작부, 배당표. 테마마다 캐비닛 색이 통째로 바뀜 */
+:root {
+  --font-display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-led: "DotGothic16", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --cell: clamp(68px, 21vw, 112px);
+  /* 기본(바다) 팔레트 — 테마별 값은 아래 [data-skin]에서 다시 정의 */
+  --bg: #04141f;
+  --bg-glow: #0b3a52;
+  --cabinet: #0a2a3d;
+  --cabinet-edge: #15506d;
+  --panel: #061d2b;
+  --fg: #e6f7ff;
+  --muted: #86b0c3;
+  --accent: #2fd3e0;
+  --accent-ink: #022a30;
+  --prize: #ffcf5c;
+  --reel-bg: #f1fbff;
+  --reel-shade: #bfe3f0;
+  --reel-line: #cfe9f3;
+  color-scheme: dark;
+}
+body[data-skin="fruit"] {
+  --bg: #250c10; --bg-glow: #5c1d22; --cabinet: #57191e; --cabinet-edge: #8c2e2f; --panel: #3a1115;
+  --fg: #fff3e6; --muted: #d8a597; --accent: #ffb02e; --accent-ink: #3a1d00; --prize: #9be15d;
+  --reel-bg: #fff8ee; --reel-shade: #f3d9bd; --reel-line: #f1e1cc;
+}
+body[data-skin="retro"] {
+  --bg: #110c05; --bg-glow: #3b2a10; --cabinet: #3a2911; --cabinet-edge: #7a5a22; --panel: #1d1508;
+  --fg: #fbebc8; --muted: #bba476; --accent: #e8b23a; --accent-ink: #2b1d02; --prize: #ff6a4d;
+  --reel-bg: #fffcf3; --reel-shade: #e9dcbc; --reel-line: #efe4c8;
+}
+body[data-skin="space"] {
+  --bg: #07061a; --bg-glow: #241d5c; --cabinet: #19153e; --cabinet-edge: #3d348a; --panel: #0d0b26;
+  --fg: #eeebff; --muted: #a39cd2; --accent: #a98bff; --accent-ink: #160b3d; --prize: #5ef2c2;
+  --reel-bg: #1c1848; --reel-shade: #0f0c2e; --reel-line: #2c2765;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, var(--bg-glow), transparent 70%),
+    var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-inline: 16px;
+  padding-block: 20px 40px;
+  transition: background-color .4s;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--prize); outline-offset: 2px; }
+
+.cabinet {
+  max-width: 520px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+  background: var(--cabinet);
+  border: 2px solid var(--cabinet-edge);
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 24px 60px -20px #000c, inset 0 1px 0 #ffffff1a;
+}
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { min-width: 0; }
+.brand h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(26px, 7vw, 34px);
+  line-height: 1;
+  letter-spacing: .02em;
+  color: var(--accent);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.brand p { margin: 4px 0 0; font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+.icon-btn {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--cabinet-edge);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:hover { border-color: var(--accent); }
+
+.meters { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.meter {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-width: 0;
+  box-shadow: inset 0 2px 6px #0008;
+}
+.meter span { display: block; font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.meter b {
+  display: block;
+  font-family: var(--font-led);
+  font-weight: 400;
+  font-size: clamp(17px, 5vw, 22px);
+  color: var(--prize);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.window {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel);
+  border-radius: 14px;
+  box-shadow: inset 0 3px 10px #000a;
+}
+.reel {
+  position: relative;
+  height: calc(var(--cell) * 3);
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(var(--reel-shade), var(--reel-bg) 22%, var(--reel-bg) 78%, var(--reel-shade));
+}
+.strip { position: absolute; inset: 0 0 auto 0; will-change: transform; }
+.cell {
+  height: var(--cell);
+  display: grid; place-items: center;
+  font-size: calc(var(--cell) * .52);
+  line-height: 1;
+  border-bottom: 1px solid var(--reel-line);
+  user-select: none;
+}
+.reel.blur .strip { filter: blur(1.5px); }
+.cell.win { animation: pop .7s ease-in-out infinite alternate; background: color-mix(in srgb, var(--prize) 30%, transparent); }
+@keyframes pop { from { transform: scale(1); } to { transform: scale(1.14); } }
+.payline {
+  position: absolute; left: 4px; right: 4px; top: 50%;
+  height: 2px; margin-top: -1px;
+  background: color-mix(in srgb, var(--prize) 55%, transparent);
+  pointer-events: none;
+}
+
+.message {
+  margin: 0;
+  min-height: 1.55em;
+  text-align: center;
+  font-weight: 600;
+  color: var(--fg);
+}
+.message.big { color: var(--prize); }
+
+.controls { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: stretch; }
+.bet {
+  display: grid; grid-template-columns: 40px auto 40px; align-items: center;
+  background: var(--panel); border-radius: 12px; padding: 6px;
+}
+.bet button {
+  height: 40px; border-radius: 9px; border: 1px solid var(--cabinet-edge);
+  background: var(--cabinet); font-size: 20px; line-height: 1;
+}
+.bet button:disabled { opacity: .35; cursor: default; }
+.bet output { min-width: 64px; text-align: center; }
+.bet output span { display: block; font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.bet output b { font-family: var(--font-led); font-weight: 400; font-size: 20px; color: var(--prize); font-variant-numeric: tabular-nums; }
+.spin {
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: .08em;
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--accent) 50%, #000), 0 0 24px -4px var(--accent);
+  transition: transform .08s, box-shadow .08s;
+}
+.spin:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 50%, #000); }
+.spin:disabled { filter: grayscale(.5) brightness(.8); cursor: default; }
+.auto {
+  min-width: 76px;
+  display: grid; place-content: center; gap: 2px;
+  border-radius: 14px;
+  border: 2px solid var(--accent);
+  background: var(--panel);
+  color: var(--accent);
+  padding: 6px 10px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.1;
+}
+.auto small { font-family: var(--font-body); font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.auto[aria-pressed="true"] { background: var(--prize); border-color: var(--prize); color: var(--bg); }
+.auto[aria-pressed="true"] small { color: var(--bg); }
+
+.paytable { background: var(--panel); border-radius: 12px; padding: 12px 14px; }
+.paytable h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .08em; }
+.paytable ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+.paytable li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
+.paytable li .sym { font-size: 18px; letter-spacing: 2px; }
+.paytable li b { font-family: var(--font-led); font-weight: 400; color: var(--prize); font-variant-numeric: tabular-nums; }
+.paytable p { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+
+/* 설정 시트 */
+.backdrop {
+  position: fixed; inset: 0; z-index: 10;
+  background: #000a;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.sheet {
+  width: 100%; max-width: 520px; max-height: 100%;
+  overflow-y: auto;
+  background: var(--cabinet);
+  border: 2px solid var(--cabinet-edge);
+  border-radius: 20px;
+  padding: 18px;
+  display: grid; gap: 18px;
+  animation: rise .22s ease-out;
+}
+@keyframes rise { from { transform: translateY(24px); opacity: .4; } }
+@media (min-width: 640px) { .backdrop { align-items: center; } }
+.sheet header { display: flex; justify-content: space-between; align-items: center; }
+.sheet h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 24px; color: var(--accent); }
+.sheet fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.sheet legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .08em; }
+
+.skins { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.skin { position: relative; }
+.skin input { position: absolute; opacity: 0; }
+.skin label {
+  display: grid; gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--cabinet-edge);
+  background: var(--panel);
+  cursor: pointer;
+}
+.skin input:checked + label { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.skin input:focus-visible + label { outline: 3px solid var(--prize); outline-offset: 2px; }
+.skin .swatch { display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
+.skin .swatch i { flex: 1; }
+.skin strong { font-size: 15px; }
+.skin .preview { font-size: 20px; letter-spacing: 2px; }
+
+.segmented { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel); border-radius: 12px; padding: 4px; gap: 4px; }
+.segmented input { position: absolute; opacity: 0; }
+.segmented label { text-align: center; padding: 8px 4px; border-radius: 9px; cursor: pointer; font-weight: 600; }
+.segmented input:checked + label { background: var(--accent); color: var(--accent-ink); }
+.segmented input:focus-visible + label { outline: 3px solid var(--prize); }
+.segmented span { position: relative; display: contents; }
+.segmented.five { grid-template-columns: repeat(5, 1fr); }
+
+.odds { display: grid; gap: 6px; background: var(--panel); border-radius: 12px; padding: 12px; }
+.odds .row b { font-family: var(--font-led); font-weight: 400; font-size: 22px; color: var(--prize); font-variant-numeric: tabular-nums; }
+.odds input[type="range"] { width: 100%; accent-color: var(--accent); margin: 4px 0; }
+.odds .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.odds .rtp { margin: 0; font-size: 13px; color: var(--muted); }
+.odds .rtp b { color: var(--fg); font-family: var(--font-body); font-size: inherit; }
+
+.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.switch { position: relative; width: 52px; height: 30px; flex: none; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch i { position: absolute; inset: 0; border-radius: 999px; background: var(--panel); border: 1px solid var(--cabinet-edge); transition: background .2s; }
+.switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s; }
+.switch input:checked + i { background: var(--accent); }
+.switch input:checked + i::after { transform: translateX(22px); background: var(--accent-ink); }
+.switch input:focus-visible + i { outline: 3px solid var(--prize); outline-offset: 2px; }
+
+.refill {
+  width: 100%;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--cabinet-edge);
+  background: var(--panel);
+  font-weight: 600;
+}
+.refill:hover { border-color: var(--accent); }
+.start-auto { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.start-auto:hover { filter: brightness(1.08); }
+.note { margin: 0; font-size: 12px; color: var(--muted); }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  transform: translateX(-50%);
+  background: var(--fg); color: var(--bg);
+  padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: 14px;
+  max-width: calc(100% - 32px);
+}
+
+@media (max-width: 380px) {
+  .controls { grid-template-columns: 1fr auto; }
+  .bet { grid-column: 1 / -1; justify-content: center; }
+  .spin { height: 58px; }
+  .paytable ul { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cell.win { animation: none; outline: 3px solid var(--prize); outline-offset: -3px; }
+  .sheet { animation: none; }
+}
+</style>
+</head>
+<body data-skin="ocean">
+<main class="cabinet">
+  <div class="top">
+    <div class="brand">
+      <h1>릴 아케이드</h1>
+      <p id="skin-label">바다 테마 · 5줄 릴 게임</p>
+    </div>
+    <button class="icon-btn" id="open-settings" type="button" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      설정
+    </button>
+  </div>
+
+  <div class="meters">
+    <div class="meter"><span>코인</span><b id="coins">1,000</b></div>
+    <div class="meter"><span>이번 당첨</span><b id="last-win">0</b></div>
+    <div class="meter"><span>최고 당첨</span><b id="best-win">0</b></div>
+  </div>
+
+  <div class="window" id="window" aria-label="릴">
+    <div class="reel"><div class="strip"></div></div>
+    <div class="reel"><div class="strip"></div></div>
+    <div class="reel"><div class="strip"></div></div>
+    <div class="payline" aria-hidden="true"></div>
+  </div>
+
+  <p class="message" id="message" aria-live="polite">스핀을 눌러 시작하세요. 스페이스 바로도 돌릴 수 있고, 자동 버튼을 누르면 알아서 돌아가요.</p>
+
+  <div class="controls">
+    <div class="bet">
+      <button type="button" id="bet-down" aria-label="베팅 줄이기">−</button>
+      <output id="bet-out"><span>베팅</span><b id="bet">10</b></output>
+      <button type="button" id="bet-up" aria-label="베팅 늘리기">+</button>
+    </div>
+    <button class="spin" type="button" id="spin">스핀</button>
+    <button class="auto" type="button" id="auto" aria-pressed="false">자동<small id="auto-sub">10회</small></button>
+  </div>
+
+  <section class="paytable" aria-labelledby="paytable-title">
+    <h2 id="paytable-title">배당표 · 한 줄에 같은 그림 3개</h2>
+    <ul id="paytable"></ul>
+    <p>가운데·위·아래 줄과 대각선 2줄, 모두 5줄을 봅니다. 한 줄 당첨금은 베팅 ÷ 5 × 배당이고, 당첨 확률은 설정에서 바꿀 수 있어요. 코인은 가상 코인이라 현금이나 상품으로 바꿀 수 없어요.</p>
+  </section>
+</main>
+
+<div class="backdrop" id="settings" hidden>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <header>
+      <h2 id="settings-title">설정</h2>
+      <button class="icon-btn" type="button" id="close-settings">닫기</button>
+    </header>
+
+    <fieldset>
+      <legend>테마</legend>
+      <div class="skins" id="skin-options"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>스핀 속도</legend>
+      <div class="segmented">
+        <span><input type="radio" name="speed" id="speed-fast" value="fast"><label for="speed-fast">빠르게</label></span>
+        <span><input type="radio" name="speed" id="speed-normal" value="normal"><label for="speed-normal">보통</label></span>
+        <span><input type="radio" name="speed" id="speed-slow" value="slow"><label for="speed-slow">느리게</label></span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>당첨 확률</legend>
+      <div class="odds">
+        <div class="row">
+          <label for="win-rate">스핀 한 번에 한 줄 이상 맞을 확률</label>
+          <b id="win-rate-out">25%</b>
+        </div>
+        <input type="range" id="win-rate" min="5" max="90" step="5" value="25">
+        <div class="scale" aria-hidden="true"><span>5% 짜게</span><span>25% 기본</span><span>90% 후하게</span></div>
+        <p class="rtp" id="rtp">예상 환수율 계산 중…</p>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>자동 스핀</legend>
+      <div class="segmented five" id="auto-counts">
+        <span><input type="radio" name="auto-count" id="auto-10" value="10"><label for="auto-10">10회</label></span>
+        <span><input type="radio" name="auto-count" id="auto-25" value="25"><label for="auto-25">25회</label></span>
+        <span><input type="radio" name="auto-count" id="auto-50" value="50"><label for="auto-50">50회</label></span>
+        <span><input type="radio" name="auto-count" id="auto-100" value="100"><label for="auto-100">100회</label></span>
+        <span><input type="radio" name="auto-count" id="auto-0" value="0"><label for="auto-0">계속</label></span>
+      </div>
+      <div class="row">
+        <label for="auto-stop-big">큰 당첨(베팅 10배 이상)이 나오면 멈추기</label>
+        <span class="switch"><input type="checkbox" id="auto-stop-big" role="switch"><i aria-hidden="true"></i></span>
+      </div>
+      <button class="refill start-auto" type="button" id="start-auto">자동 스핀 시작</button>
+      <p class="note">코인이 베팅보다 적어지면 저절로 멈춰요. 화면의 자동 버튼으로도 시작하고 멈출 수 있어요.</p>
+    </fieldset>
+
+    <div class="row">
+      <label for="sound">효과음</label>
+      <span class="switch"><input type="checkbox" id="sound" role="switch"><i aria-hidden="true"></i></span>
+    </div>
+
+    <fieldset>
+      <legend>코인</legend>
+      <button class="refill" type="button" id="refill">코인 1,000개로 다시 채우기</button>
+      <p class="note">설정과 코인은 이 브라우저에만 저장돼요.</p>
+    </fieldset>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  // 그림 순서 = 흔한 것부터 귀한 것까지. 가중치·배당은 모든 테마가 공유
+  const WEIGHTS = [30, 25, 20, 12, 8, 5];
+  const PAYS = [7, 14, 28, 75, 180, 700];
+  const SKINS = {
+    ocean: { name: "바다", symbols: ["🐚", "🦀", "🐠", "🐙", "🦈", "🐋"], swatch: ["#04141f", "#0a2a3d", "#2fd3e0", "#ffcf5c"] },
+    fruit: { name: "과일", symbols: ["🍒", "🍋", "🍊", "🍇", "🍉", "⭐"], swatch: ["#250c10", "#57191e", "#ffb02e", "#9be15d"] },
+    retro: { name: "레트로", symbols: ["🍒", "🔔", "🍀", "💎", "👑", "7️⃣"], swatch: ["#110c05", "#3a2911", "#e8b23a", "#ff6a4d"] },
+    space: { name: "우주", symbols: ["⭐", "🌙", "☄️", "🚀", "🛸", "🪐"], swatch: ["#07061a", "#19153e", "#a98bff", "#5ef2c2"] },
+  };
+  const LINES = [
+    { name: "가운데 줄", rows: [1, 1, 1] },
+    { name: "윗줄", rows: [0, 0, 0] },
+    { name: "아랫줄", rows: [2, 2, 2] },
+    { name: "대각선 ↘", rows: [0, 1, 2] },
+    { name: "대각선 ↗", rows: [2, 1, 0] },
+  ];
+  const BETS = [10, 20, 50, 100];
+  const START_COINS = 1000;
+  const SPEED_MS = { fast: 550, normal: 1000, slow: 1700 };
+  const STORE_KEY = "reelArcade.v1";
+  const WIN_RATE = { min: 5, max: 90, def: 25 };
+  const AUTO_COUNTS = [10, 25, 50, 100, 0]; // 0 = 멈출 때까지 계속
+
+  const $ = (id) => document.getElementById(id);
+  const reels = [...document.querySelectorAll(".reel")];
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const state = { skin: "ocean", speed: "normal", sound: true, coins: START_COINS, betIndex: 0, best: 0, winRate: WIN_RATE.def, autoCount: 10, autoStopBig: true };
+  try { Object.assign(state, JSON.parse(localStorage.getItem(STORE_KEY) || "{}")); } catch (e) {}
+  if (!SKINS[state.skin]) state.skin = "ocean";
+  if (!SPEED_MS[state.speed]) state.speed = "normal";
+  if (!AUTO_COUNTS.includes(state.autoCount)) state.autoCount = 10;
+  state.winRate = Math.min(WIN_RATE.max, Math.max(WIN_RATE.min, Number(state.winRate) || WIN_RATE.def));
+  const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} };
+
+  const totalWeight = WEIGHTS.reduce((a, b) => a + b, 0);
+  const pick = () => {
+    let r = Math.random() * totalWeight;
+    for (let i = 0; i < WEIGHTS.length; i++) { if ((r -= WEIGHTS[i]) < 0) return i; }
+    return 0;
+  };
+  // 당첨 그림은 실제 확률과 같은 비율(가중치³)로 고릅니다. 그래야 귀한 그림이 너무 자주 나오지 않아요
+  const WIN_WEIGHTS = WEIGHTS.map((w) => w ** 3);
+  const totalWinWeight = WIN_WEIGHTS.reduce((a, b) => a + b, 0);
+  const pickWinSymbol = () => {
+    let r = Math.random() * totalWinWeight;
+    for (let i = 0; i < WIN_WEIGHTS.length; i++) { if ((r -= WIN_WEIGHTS[i]) < 0) return i; }
+    return 0;
+  };
+  const randomGrid = () => [0, 1, 2].map(() => [pick(), pick(), pick()]); // grid[릴][행]
+
+  // 당첨 확률 조절: 먼저 이번 스핀의 당첨 여부를 정하고, 그에 맞는 판을 만듭니다
+  function makeGrid(winRate) {
+    if (Math.random() < winRate / 100) {
+      const g = randomGrid();
+      const line = LINES[Math.floor(Math.random() * LINES.length)];
+      const sym = pickWinSymbol();
+      line.rows.forEach((row, r) => (g[r][row] = sym));
+      return g;
+    }
+    let g;
+    do { g = randomGrid(); } while (lineWins(g).length);
+    return g;
+  }
+  let grid = randomGrid();
+  let spinning = false;
+  const auto = { running: false, left: 0, run: 0 };
+
+  const fmt = (n) => n.toLocaleString("ko-KR");
+  const symbol = (i) => SKINS[state.skin].symbols[i];
+  const cellHTML = (i) => `<div class="cell">${symbol(i)}</div>`;
+
+  function renderReels() {
+    reels.forEach((reel, r) => {
+      const strip = reel.querySelector(".strip");
+      strip.style.transition = "none";
+      strip.style.transform = "translateY(0)";
+      strip.innerHTML = grid[r].map(cellHTML).join("");
+      reel.setAttribute("aria-label", `${r + 1}번 릴: ${grid[r].map(symbol).join(" ")}`);
+    });
+  }
+  function renderMeters() {
+    $("coins").textContent = fmt(state.coins);
+    $("best-win").textContent = fmt(state.best);
+    $("bet").textContent = BETS[state.betIndex];
+    const busy = spinning || auto.running;
+    $("bet-down").disabled = busy || state.betIndex === 0;
+    $("bet-up").disabled = busy || state.betIndex === BETS.length - 1;
+    $("spin").disabled = busy;
+    renderAuto();
+  }
+  function renderAuto() {
+    const btn = $("auto");
+    btn.setAttribute("aria-pressed", String(auto.running));
+    btn.firstChild.textContent = auto.running ? "멈춤" : "자동";
+    $("auto-sub").textContent = auto.running
+      ? (auto.left === Infinity ? "계속 도는 중" : `${auto.left}회 남음`)
+      : (state.autoCount ? `${state.autoCount}회` : "계속");
+  }
+  function renderPaytable() {
+    $("paytable").innerHTML = PAYS.map((m, i) => i).reverse()
+      .map((i) => `<li><span class="sym">${symbol(i).repeat(3)}</span><b>×${PAYS[i]}</b></li>`).join("");
+  }
+  function applySkin() {
+    document.body.dataset.skin = state.skin;
+    $("skin-label").textContent = `${SKINS[state.skin].name} 테마 · 5줄 릴 게임`;
+    renderReels();
+    renderPaytable();
+  }
+
+  // 효과음: 첫 스핀(사용자 클릭) 때 오디오를 켭니다
+  let audio;
+  function beep(freq, ms, type = "square", vol = 0.05, delay = 0) {
+    if (!state.sound) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const t = audio.currentTime + delay / 1000;
+      const osc = audio.createOscillator(), gain = audio.createGain();
+      osc.type = type; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(vol, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t); osc.stop(t + ms / 1000);
+    } catch (e) {}
+  }
+  const jingle = (big) => (big ? [523, 659, 784, 1047, 1319] : [659, 784, 1047])
+    .forEach((f, i) => beep(f, 160, "triangle", 0.07, i * 110));
+
+  function spinReel(r, finalCol, duration) {
+    const reel = reels[r];
+    const strip = reel.querySelector(".strip");
+    const h = reel.querySelector(".cell").offsetHeight;
+    const filler = Array.from({ length: 14 + r * 5 }, pick);
+    const cells = [...finalCol, ...filler, ...grid[r]];
+    strip.style.transition = "none";
+    strip.innerHTML = cells.map(cellHTML).join("");
+    strip.style.transform = `translateY(${-(cells.length - 3) * h}px)`;
+    void strip.offsetHeight;
+    strip.style.transition = `transform ${duration}ms cubic-bezier(.15,.75,.25,1.06)`;
+    strip.style.transform = "translateY(0)";
+    reel.classList.add("blur");
+    setTimeout(() => reel.classList.remove("blur"), duration * 0.7);
+    return new Promise((res) => setTimeout(() => { beep(180 + r * 60, 70); res(); }, duration));
+  }
+
+  function lineWins(g, bet = 5) {
+    const wins = [];
+    for (const line of LINES) {
+      const syms = line.rows.map((row, r) => g[r][row]);
+      if (syms[0] === syms[1] && syms[1] === syms[2]) {
+        wins.push({ line, sym: syms[0], amount: Math.floor((bet * PAYS[syms[0]]) / 5) });
+      }
+    }
+    return wins;
+  }
+
+  // 지정한 당첨 확률로 많이 돌려 본 평균 환수율(베팅 대비 돌려받는 코인)
+  function estimateRtp(winRate, spins = 20000) {
+    let paid = 0;
+    for (let i = 0; i < spins; i++) paid += lineWins(makeGrid(winRate), 100).reduce((a, w) => a + w.amount, 0);
+    return Math.round(paid / spins);
+  }
+  function renderWinRate() {
+    $("win-rate").value = state.winRate;
+    $("win-rate-out").textContent = `${state.winRate}%`;
+    $("rtp").innerHTML = `예상 환수율 약 <b>${estimateRtp(state.winRate)}%</b> · 100코인을 걸면 평균 이만큼 돌려받아요`;
+  }
+
+  function highlight(wins) {
+    for (const w of wins) {
+      w.line.rows.forEach((row, r) => reels[r].querySelectorAll(".cell")[row].classList.add("win"));
+    }
+  }
+
+  async function spin() {
+    if (spinning) return null;
+    const bet = BETS[state.betIndex];
+    if (state.coins < bet) {
+      setMessage(state.coins > 0 ? "코인이 부족해요. 베팅을 줄이거나 설정에서 코인을 다시 채우세요." : "코인을 다 썼어요. 설정에서 코인을 다시 채울 수 있어요.");
+      return null;
+    }
+    spinning = true;
+    state.coins -= bet;
+    $("last-win").textContent = "0";
+    setMessage("돌아가는 중…");
+    renderMeters();
+    beep(440, 60, "square", 0.04);
+
+    const next = makeGrid(state.winRate);
+    const base = reduceMotion ? 150 : SPEED_MS[state.speed];
+    await Promise.all(next.map((col, r) => spinReel(r, col, base + r * base * 0.35)));
+    grid = next;
+    renderReels();
+
+    const wins = lineWins(grid, bet);
+    const total = wins.reduce((a, w) => a + w.amount, 0);
+    const big = total >= bet * 10;
+    if (total > 0) {
+      state.coins += total;
+      state.best = Math.max(state.best, total);
+      highlight(wins);
+      $("last-win").textContent = fmt(total);
+      const detail = wins.map((w) => `${w.line.name} ${symbol(w.sym)}×3`).join(", ");
+      setMessage(`${detail} · ${fmt(total)}코인 당첨!`, big);
+      jingle(big);
+    } else {
+      setMessage("아쉬워요. 다시 돌려보세요.");
+    }
+    spinning = false;
+    save();
+    renderMeters();
+    return { total, big };
+  }
+
+  // 자동 스핀: 정한 횟수만큼 돌리고, 코인이 모자라거나 (설정 시) 큰 당첨이 나오면 멈춥니다
+  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+  async function startAuto() {
+    if (auto.running) return;
+    if (state.coins < BETS[state.betIndex]) { spin(); return; }
+    const run = ++auto.run;
+    auto.running = true;
+    auto.left = state.autoCount || Infinity;
+    renderMeters();
+    while (auto.running && run === auto.run) {
+      if (state.coins < BETS[state.betIndex]) { stopAuto("코인이 부족해서 자동 스핀을 멈췄어요"); break; }
+      const result = await spin();
+      if (!result || run !== auto.run || !auto.running) break;
+      auto.left -= 1;
+      renderAuto();
+      if (state.autoStopBig && result.big) { stopAuto("큰 당첨이 나와서 자동 스핀을 멈췄어요"); break; }
+      if (auto.left <= 0) { stopAuto(`자동 스핀 ${state.autoCount}회를 마쳤어요`); break; }
+      await wait(result.total > 0 ? 1200 : 450);
+    }
+  }
+  function stopAuto(note) {
+    if (!auto.running) return;
+    auto.running = false;
+    auto.run += 1;
+    renderMeters();
+    if (note) toast(note);
+  }
+
+  function setMessage(text, big = false) {
+    const m = $("message");
+    m.textContent = text;
+    m.classList.toggle("big", big);
+  }
+
+  let toastTimer;
+  function toast(text) {
+    const t = $("toast");
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (t.hidden = true), 1800);
+  }
+
+  // 설정
+  function buildSkinOptions() {
+    $("skin-options").innerHTML = Object.entries(SKINS).map(([key, s]) => `
+      <div class="skin">
+        <input type="radio" name="skin" id="skin-${key}" value="${key}">
+        <label for="skin-${key}">
+          <span class="swatch">${s.swatch.map((c) => `<i style="background:${c}"></i>`).join("")}</span>
+          <strong>${s.name}</strong>
+          <span class="preview" aria-hidden="true">${s.symbols.slice(3).join("")}</span>
+        </label>
+      </div>`).join("");
+  }
+  function syncSettingsForm() {
+    $(`skin-${state.skin}`).checked = true;
+    $(`speed-${state.speed}`).checked = true;
+    $("sound").checked = state.sound;
+    $(`auto-${state.autoCount}`).checked = true;
+    $("auto-stop-big").checked = state.autoStopBig;
+    renderWinRate();
+  }
+  function openSettings() {
+    stopAuto("설정을 열어서 자동 스핀을 멈췄어요");
+    if (spinning) return;
+    syncSettingsForm();
+    $("settings").hidden = false;
+    $("close-settings").focus();
+  }
+  function closeSettings() {
+    $("settings").hidden = true;
+    $("open-settings").focus();
+  }
+
+  $("open-settings").addEventListener("click", openSettings);
+  $("close-settings").addEventListener("click", closeSettings);
+  $("settings").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeSettings(); });
+  $("skin-options").addEventListener("change", (e) => {
+    state.skin = e.target.value;
+    applySkin();
+    save();
+    toast(`${SKINS[state.skin].name} 테마로 바꿨어요`);
+  });
+  document.querySelectorAll('input[name="speed"]').forEach((el) =>
+    el.addEventListener("change", () => { state.speed = el.value; save(); }));
+  $("win-rate").addEventListener("input", (e) => {
+    state.winRate = Number(e.target.value);
+    $("win-rate-out").textContent = `${state.winRate}%`;
+  });
+  $("win-rate").addEventListener("change", () => { save(); renderWinRate(); });
+  $("sound").addEventListener("change", (e) => { state.sound = e.target.checked; save(); });
+  $("auto-counts").addEventListener("change", (e) => { state.autoCount = Number(e.target.value); save(); renderAuto(); });
+  $("auto-stop-big").addEventListener("change", (e) => { state.autoStopBig = e.target.checked; save(); });
+  $("start-auto").addEventListener("click", () => {
+    $("settings").hidden = true;
+    $("auto").focus();
+    startAuto();
+  });
+  $("refill").addEventListener("click", () => {
+    state.coins = START_COINS;
+    save();
+    renderMeters();
+    setMessage("코인을 채웠어요. 스핀을 눌러 시작하세요.");
+    toast("코인을 1,000개로 채웠어요");
+  });
+
+  $("spin").addEventListener("click", spin);
+  $("auto").addEventListener("click", () => (auto.running ? stopAuto("자동 스핀을 멈췄어요") : startAuto()));
+  $("bet-down").addEventListener("click", () => { state.betIndex = Math.max(0, state.betIndex - 1); save(); renderMeters(); });
+  $("bet-up").addEventListener("click", () => { state.betIndex = Math.min(BETS.length - 1, state.betIndex + 1); save(); renderMeters(); });
+  document.addEventListener("keydown", (e) => {
+    const open = !$("settings").hidden;
+    if (e.key === "Escape" && open) closeSettings();
+    if (e.code === "Space" && !open && !e.repeat && e.target.tagName !== "BUTTON") {
+      e.preventDefault();
+      if (auto.running) stopAuto("자동 스핀을 멈췄어요"); else spin();
+    }
+  });
+
+  buildSkinOptions();
+  applySkin();
+  renderMeters();
+})();
+</script>
+</body>
+</html>
